@@ -3,7 +3,6 @@ const router = express.Router();
 const User = require('../models/user');
 const BlogPost = require('../models/blogPost');
 const AuthMiddleware = require('../middlewares/authMiddleware');
-const authMiddleware = require('../middlewares/authMiddleware');
 
 router.post('/blogPost', AuthMiddleware,  async (req, res)=> {
     // console.log(req.user);
