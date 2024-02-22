@@ -4,8 +4,9 @@ const router = express.Router();
 const jwt = require('jsonwebtoken')
 const User = require('../models/user'); 
 const config = require('../config/config')
+const upload = require('../middlewares/upload');
 
-router.post("/register", async (req, res) => {
+router.post("/register",upload.single('profile'), async (req, res) => {
   try {
     const { email } = req.body;
     const userExisting = await User.findOne({ email });
@@ -14,8 +15,9 @@ router.post("/register", async (req, res) => {
     } else {
         const salt = await bcrypt.genSalt(10);
         const hashed = await bcrypt.hash(req.body.password, salt)
-        console.log(req.body);
-        const user = new User({...req.body,  password: hashed});
+        // console.log(req.body);
+        const profile = req.file;
+        const user = new User({...req.body,  password: hashed, profile: profile });
         await user.save();
         return res.json("User registered successfully");
     }

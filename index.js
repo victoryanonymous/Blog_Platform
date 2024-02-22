@@ -13,9 +13,9 @@ mongoose.connect('mongodb://localhost:27017/blog_platform')
 .then(()=> console.log("connected to mongodb"))
 .catch((err)=> console.error(err));
 
-app.use('/', authRouter);
-app.use('/', blogPostRouter);
-app.use('/', commentRouter);    
+app.use('/auth', authRouter);
+app.use('/auth/blogPost', blogPostRouter);
+app.use('/auth', commentRouter);    
 
 app.listen(port , () => {
   console.log(`Server listining on http://127.0.0.1:${port}`);
