@@ -2,36 +2,63 @@ const express = require("express");
 const router = express.Router();
 const User  = require("../models/user");
 const BlogPost = require("../models/blogPost");
-const AuthMiddleware = require("../middlewares/authMiddleware");
+const authenticateToken = require('../middlewares/authenticateToken');
 const upload = require("../middlewares/upload");
+const Joi = require('joi')
 
-router.post("/", AuthMiddleware, upload.single("media"), async (req, res) => {
+function validateBlog(blog) {
+  const blogSchema = Joi.object({
+    title: Joi.string().min(5).max(255).required().empty()
+      .custom((value, helpers) => {
+        if (!value.trim()) {
+          return helpers.error("string.empty");
+        }
+        if(/^\d+$/.test(value)) {
+          return helpers.message("Username cannot consist only nums");
+        }
+        return value;
+      }),
+    content: Joi.string().min(5).max(1024).required().empty()
+    .custom((value, helpers) => {
+      if (!value.trim()) {
+        return helpers.error("string.empty");
+      }
+      if(/^\d+$/.test(value)) {
+        return helpers.message("Username cannot consist only nums");
+      }
+      return value;
+    })
+  });
+
+  return blogSchema.validate(blog, { abortEarly: false });
+}
+
+router.post("/", authenticateToken , upload.single("media"), async (req, res) => {
   try {
     let user = req.user;
-    console.log(user);
     user = await User.findById(user._id);
-    console.log(user);
     if (!user) return res.json("user not exist");
-    if (user.isAdmin === true) {
-      const { title, content, author } = req.body;
-      const { filename, destination } = req.file;
+  
+    const { error } = validateBlog(req.body)
+    if(error) return res.status(400).json(error.details[0].message);
 
-      const newBlogPost = new BlogPost({
-        title,
-        content,
-        author,
-        media: {
-          filename,
-          destination,
-        },
-      });
+    const { title, content } = req.body;
+    const { filename, destination } = req.file;
+    const userId = user._id;
 
-      const savedBlogPost = await newBlogPost.save();
+    const newBlogPost = new BlogPost({
+      title,
+      content,
+      author: userId,
+      media: {
+        filename,
+        destination,
+      },
+    });
 
-      res.status(201).json(savedBlogPost);
-    } else {
-      return res.status(403).json("Forbidden: User is not a Admin");
-    }
+    const savedBlogPost = await newBlogPost.save();
+
+    res.status(201).json(savedBlogPost);
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Internal Server Error" });
@@ -48,48 +75,55 @@ router.get("/", async (req, res) => {
   }
 });
 
-router.put("/:id", AuthMiddleware, upload.single("media"), async (req, res) => {
+router.get('/:id', async (req, res) => {
+  try {
+    const blogPost = await BlogPost.findById(req.params.id)
+    if(!blogPost)
+      return res.send("BlogPost not Found")
+    
+    res.status(201).json(blogPost)
+  } catch(error) {
+    console.log(error)
+    return res.send(error)
+  }
+})
+
+router.put("/:id", authenticateToken , upload.single("media"), async (req, res) => {
   let user = req.user;
   try {
     user = await User.findById(user._id);
     if (!user) return res.json("user not exist");
-    if (user.isAdmin === true) {
-      const { title, content, author } = req.body;
-      const media = req.file;
-      let blogPost = await BlogPost.findById(req.params.id);
-      if (!blogPost) return res.status(404).json("BlogPost not found");
-      blogPost.title = title || blogPost.title;
-      blogPost.content = content || blogPost.content;
-      blogPost.author = author || blogPost.author;
-      blogPost.media = media || blogPost.media;
-      blogPost.createdAt = blogPost.createdAt;
-      blogPost.updatedAt = Date.now();
-      await blogPost.save();
-      return res.status(201).json(blogPost);
-    } else {
-      return res.status(403).json("Forbidden: User is not a Admin");
-    }
+
+    const { title, content } = req.body;
+    const author = user._id;
+    const media = req.file;
+    let blogPost = await BlogPost.findById(req.params.id);
+    if (!blogPost) return res.status(404).json("BlogPost not found");
+    blogPost.title = title || blogPost.title;
+    blogPost.content = content || blogPost.content;
+    blogPost.author = author || blogPost.author;
+    blogPost.media = media || blogPost.media;
+    blogPost.createdAt = blogPost.createdAt;
+    blogPost.updatedAt = Date.now();
+    await blogPost.save();
+    return res.status(201).json(blogPost);
   } catch (error) {
     console.log(error);
     return res.status(500).json("Internal Server Error");
   }
 });
 
-router.delete("/:id", AuthMiddleware, async (req, res) => {
+router.delete("/:id", authenticateToken, async (req, res) => {
   try {
     let user = req.user;
     user = await User.findById(user._id);
     if (!user) return res.json("user not exist");
-    if (user.isAdmin === true) {
-      const blogPost = await BlogPost.findByIdAndDelete(req.params.id);
+    const blogPost = await BlogPost.findByIdAndDelete(req.params.id);
 
-      if (!blogPost) {
-        return res.status(404).json("blog with given id does not exist");
-      }
-      res.json(blogPost);
-    } else {
-      return res.status(403).json("Forbidden: User is not a Admin");
+    if (!blogPost) {
+      return res.status(404).json("blog with given id does not exist");
     }
+    res.json(blogPost);
   } catch (error) {
     res.status(500).send(error);
   }
